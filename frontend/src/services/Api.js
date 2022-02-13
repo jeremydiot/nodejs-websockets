@@ -10,8 +10,8 @@ const api = axios.create({
 
 const loadChannels = async () => {
   try {
-    const response = await api.get('/getChannels')
-    return response.data && response.data.channels
+    const response = await api.get('/channels')
+    return response.data
   } catch (error) {
     console.error(error)
   }

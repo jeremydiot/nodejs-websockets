@@ -1,20 +1,20 @@
 import Channel from './Channel'
 
 function ChannelList ({ channels, onSelectChannel }) {
-  let list = 'There is no channels to show'
-
-  const handleClick = (id) => {
-    onSelectChannel(id)
+  const handleClick = (channelId) => {
+    onSelectChannel(channelId)
   }
 
-  if (channels && channels.length > 0) {
-    list = channels.map(c => {
+  let list = 'There is no channels'
+
+  if (channels.length > 0) {
+    list = channels.map((c, index) => {
       return (
         <Channel
-          key={c.id}
+          key={index}
           id={c.id}
           name={c.name}
-          participants={c.participants}
+          participants={c.sockets.length}
           onClick={handleClick}
         />
       )

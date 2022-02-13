@@ -3,15 +3,12 @@ const bodyParser = require('body-parser')
 const app = express()
 const cors = require('cors')
 
+// server configuration
 app.use(cors())
-
-// Utilisation & support du JSON dans le backend
 app.use(bodyParser.json())
 app.use(bodyParser.urlencoded({ extended: true }))
-// Dossier public
 app.use(express.static('public'))
 
-// Instanciation d'un serveur HTTP basé sur Express
 const server = require('http').Server(app)
 const io = require('socket.io')(server, {
   cors: {
@@ -19,17 +16,20 @@ const io = require('socket.io')(server, {
   }
 })
 
-const STATIC_CHANNELS = [
+const CHANNELS_CONFIG = [
+  {
+    id: 0,
+    name: 'Global Chat',
+    sockets: []
+  },
   {
     id: 1,
-    name: 'Global Chat',
-    participants: 0,
+    name: 'Channel 1',
     sockets: []
   },
   {
     id: 2,
     name: 'Channel 2',
-    participants: 0,
     sockets: []
   }
 ]
@@ -42,51 +42,53 @@ app.get('/', (req, res) => {
   res.send('Hello world !')
 })
 
-app.get('/getChannels', (req, res) => {
-  res.json({
-    channels: STATIC_CHANNELS
-  })
+app.get('/channels', (req, res) => {
+  res.json(CHANNELS_CONFIG)
 })
 
 io.on('connection', (socket) => {
   console.log(`client connected on socket ${socket.id}`)
-  // Connection avec le client active
+
   socket.emit('connected', null)
 
-  socket.on('channel-join', (id) => {
-    console.log(`${socket.id} joined channel : ${id}`)
-    STATIC_CHANNELS.forEach(c => {
-      // On retrouve le cannal sélectionné
-      if (c.id === id) {
-        // Si le socket n'est pas déjà dans le cannal
+  socket.on('send-message', message => {
+    CHANNELS_CONFIG.forEach(c => {
+      // find targeted channel
+      if (c.id === message.channelId) {
+        c.sockets.forEach(socketId => {
+          // send message to channel users
+          io.to(socketId).emit('message', message)
+        })
+      }
+    })
+  })
+
+  socket.on('channel-join', channelId => {
+    CHANNELS_CONFIG.forEach((c) => {
+      // find target channel
+      if (c.id === channelId) {
+        // if user not already connected
         if (c.sockets.indexOf(socket.id) === -1) {
           c.sockets.push(socket.id)
-          c.participants++
           io.emit('channel', c)
         }
       } else {
+        // if user connected in another channel
         const index = c.sockets.indexOf(socket.id)
         if (index !== -1) {
           c.sockets.splice(index, 1)
-          c.participants--
           io.emit('channel', c)
         }
       }
     })
-    return id
-  })
-
-  socket.on('send-message', message => {
-    io.emit('message', message)
   })
 
   socket.on('disconnect', () => {
-    console.log('client disconnected')
-    STATIC_CHANNELS.forEach(c => {
+    console.log(`client disconnected ${socket.id}`)
+    CHANNELS_CONFIG.forEach((c) => {
       const index = c.sockets.indexOf(socket.id)
       if (index !== -1) {
         c.sockets.splice(index, 1)
-        c.participants--
         io.emit('channel', c)
       }
     })

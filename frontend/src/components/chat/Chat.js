@@ -1,87 +1,64 @@
 import { useEffect, useState } from 'react'
 import socketClient from 'socket.io-client'
 import { loadChannels } from '../../services/Api'
-import ChannelList from './ChannelList'
 import './chat.scss'
 import MessagesPanel from './MessagesPanel'
-// Socket ENDPOINT (notre API)
+import ChannelList from './ChannelList'
+// Socket ENDPOINT
 const SOCKET_ENDPOINT = 'http://localhost:4000'
 const socket = socketClient(SOCKET_ENDPOINT)
 
 function Chat () {
-  const [channels, setChannels] = useState()
-  const [channel, setChannel] = useState()
-  // Socket client
+  const [messages, setMessages] = useState([])
+  const [channels, setChannels] = useState([])
+  const [currentChannelId, setCurrentChannelId] = useState()
 
   useEffect(() => {
-    const getData = async () => {
-      const _channels = await loadChannels()
-      setChannels(_channels)
-    }
-    getData()
-    configureSocket()
-  }, [channel])
-
-  const configureSocket = () => {
-    // Ecoute des évènements sur le socket
+    // listen socket event
     socket.on('connected', () => {
+      // collect channel list
+      (async () => {
+        const _channels = await loadChannels()
+        setChannels(_channels)
+        handleSelectChannel(_channels[0].id) // auto select first channel
+      })()
+
       console.log('Connected to server')
-      if (channel) {
-        handleChannelSelect(channel.id)
-      }
-      // else {
-      //   handleChannelSelect(channels[0].id)
-      // }
-    })
 
-    socket.on('channel', channel => {
-      const _channels = channels
-      if (_channels && _channels.length > 0) {
-        _channels.forEach(c => {
-          if (c.id === channel.id) {
-            c.participants = channel.participants
-          }
+      socket.on('message', message => {
+        setMessages(_messages => [..._messages, message])
+      })
+
+      socket.on('channel', (channel) => {
+        setChannels(_channels => {
+          return _channels.map(c => {
+            if (c.id === channel.id) return channel
+            return c
+          })
         })
-        setChannels(_channels)
-      }
+      })
     })
+  }, [])
 
-    socket.on('message', message => {
-      const _channels = channels
-      if (_channels && _channels.length > 0) {
-        _channels.forEach(c => {
-          if (c.id === message.channelId) {
-            if (!c.messages) {
-              c.messages = [message]
-            } else {
-              c.messages.push(message)
-            }
-          }
-        })
-        setChannels(_channels)
-      }
-    })
-  }
-
-  const handleChannelSelect = (id) => {
-    const channel = channels.find(c => c.id === id)
-    setChannel(channel)
-    socket.emit('channel-join', id)
-  }
-
-  const handleSendMessage = (channelId, text) => {
+  const handleSendMessage = (text) => {
     socket.emit('send-message', {
-      channelId,
-      text,
+      channelId: currentChannelId,
+      text: text,
       senderName: socket.id,
-      id: Date.now()
+      date: Date.now()
     })
+  }
+
+  const handleSelectChannel = (channelId) => {
+    setMessages([])
+    socket.emit('channel-join', channelId)
+    setCurrentChannelId(channelId)
   }
 
   return (
     <div className='chat-app'>
-      <ChannelList channels={channels} onSelectChannel={handleChannelSelect} />
-      <MessagesPanel onSendMessage={handleSendMessage} channel={channel} />
+      <ChannelList channels={channels} onSelectChannel={handleSelectChannel} />
+      <MessagesPanel messages={messages} onSendMessage={handleSendMessage} />
     </div>
   )
 }
